@@ -41,23 +41,31 @@ function! fila#viewer#BufReadCmd(factory) abort
     endif
 
     let winid = win_getid()
+    let project_root = fila#scheme#file#create_root(gina#core#get().worktree)
     let root = a:factory()
-    call helper.init(root)
-    call helper.expand_node(root)
+
+    let dirs = fila#viewer#node_list(project_root, root)
+    call helper.init(project_root)
+    call helper.expand_node(project_root)
           \.then({ h -> h.redraw() })
-          \.then({ h -> h.cursor_node(winid, root, 1) })
+          \.then({ h -> h.cursor_node(winid, project_root, 1) })
           \.then({ h -> s:notify(h.bufnr) })
+          \.then({ h -> fila#viewer#expand_recursive(dirs, a:factory, helper) })
           \.catch({ e -> fila#error#handle(e) })
 
     doautocmd <nomodeline> User FilaViewerInit
   else
     let winid = win_getid()
+    let project_root = fila#scheme#file#create_root(gina#core#get().worktree)
     let root = helper.get_root_node()
+
+    let dirs = fila#viewer#node_list(project_root, root)
     call helper.set_marks([])
     call helper.reload_node(root)
           \.then({ h -> h.redraw() })
           \.then({ h -> h.cursor_node(winid, root, 1) })
           \.then({ h -> s:notify(h.bufnr) })
+          \.then({ h -> fila#viewer#expand_recursive(dirs, a:factory, helper) })
           \.catch({ e -> fila#error#handle(e) })
   endif
   setlocal filetype=fila
@@ -72,6 +80,36 @@ function! s:notify(bufnr) abort
     call setbufvar(a:bufnr, 'fila_notifier', v:null)
   endif
   doautocmd <nomodeline> User FilaViewerRead
+endfunction
+
+function! fila#viewer#expand_recursive(dirs, factory, helper) abort
+  let project_root = fila#scheme#file#create_root(gina#core#get().worktree)
+  let root = a:factory()
+  call a:helper.expand_node(a:dirs[-1])
+        \.then({ h -> h.redraw() })
+        \.then({ h -> s:notify(h.bufnr) })
+        \.then({ h -> a:helper.cursor_node(win_getid(), a:dirs[-1], 1) })
+        \.then({ h -> remove(a:dirs, -1) })
+        \.then({ h -> len(a:dirs) > 0 ? fila#viewer#expand_recursive(a:dirs, a:factory, a:helper) : v:false })
+        \.catch({ e -> fila#error#handle(e) })
+endfunction
+
+function! fila#viewer#node_list(project_root, root) abort
+  let dirs = []
+  let node = a:root
+  while v:true
+    let node = fila#scheme#file#node#new(node.__path)
+    let node.parent = fila#scheme#file#node#new(fnamemodify(node.__path, ':p:h:h'))
+    call add(dirs, node)
+
+    if a:project_root.__path ==# node.__path
+      break
+    endif
+
+    let node = node.parent
+  endwhile
+
+  return dirs
 endfunction
 
 augroup fila_viewer_internal

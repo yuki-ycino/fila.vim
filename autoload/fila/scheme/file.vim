@@ -1,9 +1,9 @@
 function! fila#scheme#file#BufReadCmd() abort
   let path = matchstr(expand('<afile>'), 'fila://file://\zs.*')
-  call fila#viewer#BufReadCmd({ -> s:create_root(path) })
+  call fila#viewer#BufReadCmd({ -> fila#scheme#file#create_root(path) })
 endfunction
 
-function! s:create_root(path) abort
+function! fila#scheme#file#create_root(path) abort
   let root = fila#scheme#file#node#new(a:path)
   let root.parent = fila#scheme#file#node#new(fnamemodify(a:path, ':p:h:h'))
   return root
